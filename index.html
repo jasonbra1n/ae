@@ -88,10 +88,6 @@
     <div class="nebula"></div>
     <div class="celestial-egg" id="egg"></div>
 
-    <!-- Audio elements for sound effects -->
-    <audio id="tapSound" src="audio/tap.mp3"></audio>
-    <audio id="dragSound" src="audio/wooshing.mp3"></audio>
-
     <script>
         const egg = document.getElementById('egg');
         let isDragging = false;
@@ -103,6 +99,11 @@
         let velX = 0;
         let velY = 0;
         let lastFrameTime = performance.now();
+
+        // Web Audio API setup
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        let dragOscillator = null;
+        let dragGainNode = null;
 
         // Create cosmic particles
         for (let i = 0; i < 80; i++) {
@@ -143,13 +144,53 @@
 
         let lastMouseX, lastMouseY, startX, startY, initialPosX, initialPosY;
 
+        function playTapSound() {
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            oscillator.type = 'sine';
+            oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
+            gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.2);
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            oscillator.start();
+            oscillator.stop(audioContext.currentTime + 0.2);
+        }
+
+        function startDragSound() {
+            if (!dragOscillator) {
+                dragOscillator = audioContext.createOscillator();
+                dragGainNode = audioContext.createGain();
+                dragOscillator.type = 'triangle';
+                dragOscillator.frequency.setValueAtTime(200, audioContext.currentTime);
+                dragGainNode.gain.setValueAtTime(0.2, audioContext.currentTime);
+                dragOscillator.connect(dragGainNode);
+                dragGainNode.connect(audioContext.destination);
+                dragOscillator.start();
+            }
+        }
+
+        function adjustDragPitch(velocity) {
+            if (dragOscillator) {
+                const pitchFactor = Math.max(0.5, Math.min(2, (Math.abs(velocity) / 100) + 0.5));
+                dragOscillator.frequency.setValueAtTime(200 * pitchFactor, audioContext.currentTime);
+            }
+        }
+
+        function stopDragSound() {
+            if (dragOscillator) {
+                dragGainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.1);
+                dragOscillator.stop(audioContext.currentTime + 0.1);
+                dragOscillator = null;
+                dragGainNode = null;
+            }
+        }
+
         function handleStart(x, y) {
             isDragging = true;
-            playTapSound(); // Play tap sound on start of drag
-            const dragSound = document.getElementById('dragSound');
-            dragSound.currentTime = 0; // Rewind the sound to start
-            dragSound.play();
-            adjustPitch(dragSound, velX); // Adjust pitch based on velocity
+            playTapSound();
+            startDragSound();
+            adjustDragPitch(velX);
             lastMouseX = x;
             lastMouseY = y;
             startX = x;
@@ -157,17 +198,6 @@
             initialPosX = posX;
             initialPosY = posY;
             egg.style.transition = 'none';
-        }
-
-        function playTapSound() {
-            const tapSound = document.getElementById('tapSound');
-            tapSound.currentTime = 0; // Rewind the sound to start
-            tapSound.play();
-        }
-
-        function adjustPitch(sound, velocity) {
-            const pitchFactor = Math.max(0.5, (velocity / 100) + 0.5); // Adjust based on speed
-            sound.playbackRate = pitchFactor;
         }
 
         function handleMove(x, y) {
@@ -181,7 +211,7 @@
                 rotateZ += spinDelta * 0.3;
                 velX = (x - lastMouseX) * 2;
                 velY = (y - lastMouseY) * 2;
-                adjustPitch(document.getElementById('dragSound'), velX); // Adjust pitch on move
+                adjustDragPitch(velX);
                 lastMouseX = x;
                 lastMouseY = y;
             } else {
@@ -195,9 +225,8 @@
         function handleEnd() {
             if (isDragging) {
                 isDragging = false;
-                const dragSound = document.getElementById('dragSound');
-                dragSound.pause(); // Pause the dragging sound on end
-                playTapSound(); // Play tap sound on release
+                stopDragSound();
+                playTapSound();
                 egg.style.transition = 'all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
             }
         }
