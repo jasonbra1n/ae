@@ -22,14 +22,14 @@ let rightLFO = audioContext.createOscillator();
 // Setup left oscillator (persistent)
 leftOscillator.type = 'sine';
 leftOscillator.frequency.setValueAtTime(77, audioContext.currentTime);
-leftGainNode.gain.setValueAtTime(0, audioContext.currentTime); // Start silent
+leftGainNode.gain.value = 0; // Explicitly set initial gain to 0
 leftPanner.pan.setValueAtTime(-1, audioContext.currentTime); // Fully left
 leftOscillator.connect(leftGainNode).connect(leftPanner).connect(audioContext.destination);
 
 // Setup right oscillator (persistent)
 rightOscillator.type = 'sine';
 rightOscillator.frequency.setValueAtTime(117, audioContext.currentTime);
-rightGainNode.gain.setValueAtTime(0, audioContext.currentTime); // Start silent
+rightGainNode.gain.value = 0; // Explicitly set initial gain to 0
 rightPanner.pan.setValueAtTime(1, audioContext.currentTime); // Fully right
 rightOscillator.connect(rightGainNode).connect(rightPanner).connect(audioContext.destination);
 
@@ -96,12 +96,8 @@ function playTapSound() {
     const gainNode = audioContext.createGain();
     oscillator.type = 'sine';
     oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
-    
-    // Start with gain at 0 and fade in quickly
-    gainNode.gain.setValueAtTime(0, audioContext.currentTime);
-    gainNode.gain.linearRampToValueAtTime(0.3, audioContext.currentTime + 0.01); // 10ms fade-in
+    gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
     gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.2);
-    
     oscillator.connect(gainNode);
     gainNode.connect(audioContext.destination);
     oscillator.start();
@@ -109,12 +105,12 @@ function playTapSound() {
 }
 
 function startDragSound() {
-    const fadeInDuration = 0.05; // Short fade-in to avoid click
+    const fadeInDuration = 0.02; // Fast 20ms fade-in for quick response
     leftGainNode.gain.cancelScheduledValues(audioContext.currentTime);
     rightGainNode.gain.cancelScheduledValues(audioContext.currentTime);
     
-    leftGainNode.gain.setValueAtTime(0, audioContext.currentTime);
-    rightGainNode.gain.setValueAtTime(0, audioContext.currentTime);
+    leftGainNode.gain.setValueAtTime(leftGainNode.gain.value, audioContext.currentTime);
+    rightGainNode.gain.setValueAtTime(rightGainNode.gain.value, audioContext.currentTime);
     
     leftGainNode.gain.linearRampToValueAtTime(0.2, audioContext.currentTime + fadeInDuration);
     rightGainNode.gain.linearRampToValueAtTime(0.2, audioContext.currentTime + fadeInDuration);
@@ -132,7 +128,7 @@ function adjustDragPitch(velocity) {
 }
 
 function stopDragSound() {
-    const fadeOutDuration = 0.5; // Smooth fade-out
+    const fadeOutDuration = 0.5; // Smooth 500ms fade-out
     leftGainNode.gain.cancelScheduledValues(audioContext.currentTime);
     rightGainNode.gain.cancelScheduledValues(audioContext.currentTime);
     
@@ -173,9 +169,7 @@ function handleMove(x, y) {
         velX = (x - lastMouseX) * 2;
         velY = (y - lastMouseY) * 2;
         adjustDragPitch(velX);
-        lastMouseX =
-
- x;
+        lastMouseX = x;
         lastMouseY = y;
         
         if (navigator.vibrate) {
