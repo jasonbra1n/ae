@@ -10,8 +10,14 @@ let velY = 0;
 let lastFrameTime = performance.now();
 
 const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-let dragOscillator = null;
-let dragGainNode = null;
+let leftOscillator = null;
+let rightOscillator = null;
+let leftGainNode = null;
+let rightGainNode = null;
+let leftPanner = null;
+let rightPanner = null;
+let leftLFO = null;
+let rightLFO = null;
 
 // Create cosmic particles
 for (let i = 0; i < 80; i++) {
@@ -66,31 +72,86 @@ function playTapSound() {
 }
 
 function startDragSound() {
-    if (!dragOscillator) {
-        dragOscillator = audioContext.createOscillator();
-        dragGainNode = audioContext.createGain();
-        dragOscillator.type = 'triangle';
-        dragOscillator.frequency.setValueAtTime(200, audioContext.currentTime);
-        dragGainNode.gain.setValueAtTime(0.2, audioContext.currentTime);
-        dragOscillator.connect(dragGainNode);
-        dragGainNode.connect(audioContext.destination);
-        dragOscillator.start();
+    if (!leftOscillator) {
+        // Left oscillator (carrier frequency: 77 Hz)
+        leftOscillator = audioContext.createOscillator();
+        leftGainNode = audioContext.createGain();
+        leftPanner = audioContext.createStereoPanner();
+        leftOscillator.type = 'sine';
+        leftOscillator.frequency.setValueAtTime(77, audioContext.currentTime);
+        leftGainNode.gain.setValueAtTime(0.2, audioContext.currentTime);
+        leftPanner.pan.setValueAtTime(-1, audioContext.currentTime); // Fully left
+        leftOscillator.connect(leftGainNode).connect(leftPanner).connect(audioContext.destination);
+
+        // Right oscillator (carrier + beat frequency: 77 + 40 = 117 Hz)
+        rightOscillator = audioContext.createOscillator();
+        rightGainNode = audioContext.createGain();
+        rightPanner = audioContext.createStereoPanner();
+        rightOscillator.type = 'sine';
+        rightOscillator.frequency.setValueAtTime(117, audioContext.currentTime);
+        rightGainNode.gain.setValueAtTime(0.2, audioContext.currentTime);
+        rightPanner.pan.setValueAtTime(1, audioContext.currentTime); // Fully right
+        rightOscillator.connect(rightGainNode).connect(rightPanner).connect(audioContext.destination);
+
+        // Panning oscillation with LFO-like effect using OscillatorNode
+        leftLFO = audioContext.createOscillator();
+        leftLFO.type = 'sine';
+        leftLFO.frequency.setValueAtTime(40, audioContext.currentTime); // Beat frequency: 40 Hz
+        const leftLFOGain = audioContext.createGain();
+        leftLFOGain.gain.setValueAtTime(0.5, audioContext.currentTime); // Depth of oscillation
+        leftLFO.connect(leftLFOGain).connect(leftGainNode.gain);
+        leftGainNode.gain.setValueAtTime(0.5, audioContext.currentTime); // Base gain
+
+        rightLFO = audioContext.createOscillator();
+        rightLFO.type = 'sine';
+        rightLFO.frequency.setValueAtTime(40, audioContext.currentTime);
+        const rightLFOGain = audioContext.createGain();
+        rightLFOGain.gain.setValueAtTime(-0.5, audioContext.currentTime); // Inverted for right
+        rightLFO.connect(rightLFOGain).connect(rightGainNode.gain);
+        rightGainNode.gain.setValueAtTime(0.5, audioContext.currentTime); // Base gain
+
+        leftOscillator.start();
+        rightOscillator.start();
+        leftLFO.start();
+        rightLFO.start();
     }
 }
 
 function adjustDragPitch(velocity) {
-    if (dragOscillator) {
+    if (leftOscillator && rightOscillator) {
+        // Calculate pitch factor based on drag velocity (faster = higher pitch)
         const pitchFactor = Math.max(0.5, Math.min(2, (Math.abs(velocity) / 100) + 0.5));
-        dragOscillator.frequency.setValueAtTime(200 * pitchFactor, audioContext.currentTime);
+        
+        // Base frequencies with pitch fluctuation
+        const baseCarrier = 77 * pitchFactor;
+        const beatFrequency = 40; // Fixed beat frequency
+        
+        leftOscillator.frequency.setValueAtTime(baseCarrier, audioContext.currentTime);
+        rightOscillator.frequency.setValueAtTime(baseCarrier + beatFrequency, audioContext.currentTime);
+        
+        // Adjust LFO frequency to match beat frequency (panning rate remains 40 Hz)
+        leftLFO.frequency.setValueAtTime(beatFrequency, audioContext.currentTime);
+        rightLFO.frequency.setValueAtTime(beatFrequency, audioContext.currentTime);
     }
 }
 
 function stopDragSound() {
-    if (dragOscillator) {
-        dragGainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.1);
-        dragOscillator.stop(audioContext.currentTime + 0.1);
-        dragOscillator = null;
-        dragGainNode = null;
+    if (leftOscillator) {
+        leftGainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.1);
+        rightGainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.1);
+        leftOscillator.stop(audioContext.currentTime + 0.1);
+        rightOscillator.stop(audioContext.currentTime + 0.1);
+        leftLFO.stop(audioContext.currentTime + 0.1);
+        rightLFO.stop(audioContext.currentTime + 0.1);
+        
+        leftOscillator = null;
+        rightOscillator = null;
+        leftGainNode = null;
+        rightGainNode = null;
+        leftPanner = null;
+        rightPanner = null;
+        leftLFO = null;
+        rightLFO = null;
     }
 }
 
@@ -107,7 +168,6 @@ function handleStart(x, y) {
     initialPosY = posY;
     egg.style.transition = 'none';
     
-    // Start vibration if supported
     if (navigator.vibrate) {
         navigator.vibrate([200, 50, 200, 50, 200]);
     }
@@ -128,7 +188,6 @@ function handleMove(x, y) {
         lastMouseX = x;
         lastMouseY = y;
         
-        // Continue vibration while dragging
         if (navigator.vibrate) {
             navigator.vibrate([50, 50, 50]);
         }
@@ -147,7 +206,6 @@ function handleEnd() {
         playTapSound();
         egg.style.transition = 'all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
         
-        // Stop vibration
         if (navigator.vibrate) {
             navigator.vibrate(0);
         }
