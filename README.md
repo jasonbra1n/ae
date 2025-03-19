@@ -1,7 +1,3 @@
-That’s a fantastic goal! Adding interactivity where the egg "learns" and "communicates" opens up some exciting possibilities—think evolving behavior, responsive audio-visual feedback, or even simple AI-like responses. I’ve updated the `README.md` to reflect this vision under the "Goals" section. Here’s the revised version:
-
----
-
 # Celestial Dragon Egg
 
 Welcome to the **Celestial Dragon Egg** project! This is an interactive web-based experiment featuring a draggable, spinning egg with cosmic particles and immersive audio effects. Built with vanilla JavaScript, this project showcases dynamic movement, Web Audio API sound design, and haptic feedback for a unique user experience. The long-term vision is to make the egg more interactive, enabling it to learn from user interactions and communicate in creative ways.
@@ -105,5 +101,3 @@ This project is licensed under the MIT License—see the [LICENSE](LICENSE) file
 
 - Built with inspiration from interactive web experiments and audio-visual art.
 - Thanks to the Web Audio API for enabling rich sound design in the browser!
-
----
