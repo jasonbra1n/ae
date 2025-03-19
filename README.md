@@ -15,7 +15,7 @@ Welcome to the **Celestial Dragon Egg** project! This is an interactive web-base
 
 ## Demo
 
-(You can add a link here if you host a live demo, e.g., on GitHub Pages or another platform.)
+Try it out live at [https://jasonbra1n.github.io/ae/](https://jasonbra1n.github.io/ae/).
 
 ## Installation
 
