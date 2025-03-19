@@ -137,25 +137,33 @@ function adjustDragPitch(velocity) {
 
 function stopDragSound() {
     if (leftOscillator) {
-        const fadeOutDuration = 0.5; // Increased to 0.5 seconds for smoother fade
-        const stopTime = audioContext.currentTime + fadeOutDuration + 0.05; // Small buffer
+        const fadeOutDuration = 0.5; // Keep 0.5s fade duration
+        const bufferTime = 0.1; // Increased buffer to 0.1s for extra safety
+        const stopTime = audioContext.currentTime + fadeOutDuration + bufferTime;
 
-        // Linear ramp to zero to avoid exponential curve clicks
+        // Cancel any existing scheduled values
         leftGainNode.gain.cancelScheduledValues(audioContext.currentTime);
-        leftGainNode.gain.setValueAtTime(leftGainNode.gain.value, audioContext.currentTime);
-        leftGainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime + fadeOutDuration);
-
         rightGainNode.gain.cancelScheduledValues(audioContext.currentTime);
+
+        // Start fade from current value
+        leftGainNode.gain.setValueAtTime(leftGainNode.gain.value, audioContext.currentTime);
         rightGainNode.gain.setValueAtTime(rightGainNode.gain.value, audioContext.currentTime);
+
+        // Linear fade to zero
+        leftGainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime + fadeOutDuration);
         rightGainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime + fadeOutDuration);
 
-        // Stop oscillators after fade completes with buffer
+        // Explicitly set to 0 at end of fade to ensure silence
+        leftGainNode.gain.setValueAtTime(0, audioContext.currentTime + fadeOutDuration);
+        rightGainNode.gain.setValueAtTime(0, audioContext.currentTime + fadeOutDuration);
+
+        // Stop oscillators after fade + buffer
         leftOscillator.stop(stopTime);
         rightOscillator.stop(stopTime);
         leftLFO.stop(stopTime);
         rightLFO.stop(stopTime);
 
-        // Clean up references after stopping
+        // Clean up after everything is definitely stopped
         setTimeout(() => {
             leftOscillator = null;
             rightOscillator = null;
@@ -165,7 +173,7 @@ function stopDragSound() {
             rightPanner = null;
             leftLFO = null;
             rightLFO = null;
-        }, fadeOutDuration * 1000 + 50); // Match the stopTime in milliseconds
+        }, (fadeOutDuration + bufferTime) * 1000); // Exact match to stopTime in ms
     }
 }
 
