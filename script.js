@@ -10,14 +10,47 @@ let velY = 0;
 let lastFrameTime = performance.now();
 
 const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-let leftOscillator = null;
-let rightOscillator = null;
-let leftGainNode = null;
-let rightGainNode = null;
-let leftPanner = null;
-let rightPanner = null;
-let leftLFO = null;
-let rightLFO = null;
+let leftOscillator = audioContext.createOscillator();
+let rightOscillator = audioContext.createOscillator();
+let leftGainNode = audioContext.createGain();
+let rightGainNode = audioContext.createGain();
+let leftPanner = audioContext.createStereoPanner();
+let rightPanner = audioContext.createStereoPanner();
+let leftLFO = audioContext.createOscillator();
+let rightLFO = audioContext.createOscillator();
+
+// Setup left oscillator (persistent)
+leftOscillator.type = 'sine';
+leftOscillator.frequency.setValueAtTime(77, audioContext.currentTime);
+leftGainNode.gain.setValueAtTime(0, audioContext.currentTime); // Start silent
+leftPanner.pan.setValueAtTime(-1, audioContext.currentTime); // Fully left
+leftOscillator.connect(leftGainNode).connect(leftPanner).connect(audioContext.destination);
+
+// Setup right oscillator (persistent)
+rightOscillator.type = 'sine';
+rightOscillator.frequency.setValueAtTime(117, audioContext.currentTime);
+rightGainNode.gain.setValueAtTime(0, audioContext.currentTime); // Start silent
+rightPanner.pan.setValueAtTime(1, audioContext.currentTime); // Fully right
+rightOscillator.connect(rightGainNode).connect(rightPanner).connect(audioContext.destination);
+
+// Setup LFOs
+leftLFO.type = 'sine';
+leftLFO.frequency.setValueAtTime(40, audioContext.currentTime);
+const leftLFOGain = audioContext.createGain();
+leftLFOGain.gain.setValueAtTime(0.5, audioContext.currentTime);
+leftLFO.connect(leftLFOGain).connect(leftGainNode.gain);
+
+rightLFO.type = 'sine';
+rightLFO.frequency.setValueAtTime(40, audioContext.currentTime);
+const rightLFOGain = audioContext.createGain();
+rightLFOGain.gain.setValueAtTime(-0.5, audioContext.currentTime);
+rightLFO.connect(rightLFOGain).connect(rightGainNode.gain);
+
+// Start oscillators and LFOs once
+leftOscillator.start();
+rightOscillator.start();
+leftLFO.start();
+rightLFO.start();
 
 // Create cosmic particles
 for (let i = 0; i < 80; i++) {
@@ -63,8 +96,12 @@ function playTapSound() {
     const gainNode = audioContext.createGain();
     oscillator.type = 'sine';
     oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
-    gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+    
+    // Start with gain at 0 and fade in quickly
+    gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+    gainNode.gain.linearRampToValueAtTime(0.3, audioContext.currentTime + 0.01); // 10ms fade-in
     gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.2);
+    
     oscillator.connect(gainNode);
     gainNode.connect(audioContext.destination);
     oscillator.start();
@@ -72,109 +109,38 @@ function playTapSound() {
 }
 
 function startDragSound() {
-    if (!leftOscillator) {
-        // Left oscillator (carrier frequency: 77 Hz)
-        leftOscillator = audioContext.createOscillator();
-        leftGainNode = audioContext.createGain();
-        leftPanner = audioContext.createStereoPanner();
-        leftOscillator.type = 'sine';
-        leftOscillator.frequency.setValueAtTime(77, audioContext.currentTime);
-        leftGainNode.gain.setValueAtTime(0.2, audioContext.currentTime);
-        leftPanner.pan.setValueAtTime(-1, audioContext.currentTime); // Fully left
-        leftOscillator.connect(leftGainNode).connect(leftPanner).connect(audioContext.destination);
-
-        // Right oscillator (carrier + beat frequency: 77 + 40 = 117 Hz)
-        rightOscillator = audioContext.createOscillator();
-        rightGainNode = audioContext.createGain();
-        rightPanner = audioContext.createStereoPanner();
-        rightOscillator.type = 'sine';
-        rightOscillator.frequency.setValueAtTime(117, audioContext.currentTime);
-        rightGainNode.gain.setValueAtTime(0.2, audioContext.currentTime);
-        rightPanner.pan.setValueAtTime(1, audioContext.currentTime); // Fully right
-        rightOscillator.connect(rightGainNode).connect(rightPanner).connect(audioContext.destination);
-
-        // Panning oscillation with LFO-like effect using OscillatorNode
-        leftLFO = audioContext.createOscillator();
-        leftLFO.type = 'sine';
-        leftLFO.frequency.setValueAtTime(40, audioContext.currentTime); // Beat frequency: 40 Hz
-        const leftLFOGain = audioContext.createGain();
-        leftLFOGain.gain.setValueAtTime(0.5, audioContext.currentTime); // Depth of oscillation
-        leftLFO.connect(leftLFOGain).connect(leftGainNode.gain);
-        leftGainNode.gain.setValueAtTime(0.5, audioContext.currentTime); // Base gain
-
-        rightLFO = audioContext.createOscillator();
-        rightLFO.type = 'sine';
-        rightLFO.frequency.setValueAtTime(40, audioContext.currentTime);
-        const rightLFOGain = audioContext.createGain();
-        rightLFOGain.gain.setValueAtTime(-0.5, audioContext.currentTime); // Inverted for right
-        rightLFO.connect(rightLFOGain).connect(rightGainNode.gain);
-        rightGainNode.gain.setValueAtTime(0.5, audioContext.currentTime); // Base gain
-
-        leftOscillator.start();
-        rightOscillator.start();
-        leftLFO.start();
-        rightLFO.start();
-    }
+    const fadeInDuration = 0.05; // Short fade-in to avoid click
+    leftGainNode.gain.cancelScheduledValues(audioContext.currentTime);
+    rightGainNode.gain.cancelScheduledValues(audioContext.currentTime);
+    
+    leftGainNode.gain.setValueAtTime(0, audioContext.currentTime);
+    rightGainNode.gain.setValueAtTime(0, audioContext.currentTime);
+    
+    leftGainNode.gain.linearRampToValueAtTime(0.2, audioContext.currentTime + fadeInDuration);
+    rightGainNode.gain.linearRampToValueAtTime(0.2, audioContext.currentTime + fadeInDuration);
 }
 
 function adjustDragPitch(velocity) {
-    if (leftOscillator && rightOscillator) {
-        // Calculate pitch factor based on drag velocity (faster = higher pitch)
-        const pitchFactor = Math.max(0.5, Math.min(2, (Math.abs(velocity) / 100) + 0.5));
-        
-        // Base frequencies with pitch fluctuation
-        const baseCarrier = 77 * pitchFactor;
-        const beatFrequency = 40; // Fixed beat frequency
-        
-        leftOscillator.frequency.setValueAtTime(baseCarrier, audioContext.currentTime);
-        rightOscillator.frequency.setValueAtTime(baseCarrier + beatFrequency, audioContext.currentTime);
-        
-        // Adjust LFO frequency to match beat frequency (panning rate remains 40 Hz)
-        leftLFO.frequency.setValueAtTime(beatFrequency, audioContext.currentTime);
-        rightLFO.frequency.setValueAtTime(beatFrequency, audioContext.currentTime);
-    }
+    const pitchFactor = Math.max(0.5, Math.min(2, (Math.abs(velocity) / 100) + 0.5));
+    const baseCarrier = 77 * pitchFactor;
+    const beatFrequency = 40;
+    
+    leftOscillator.frequency.setValueAtTime(baseCarrier, audioContext.currentTime);
+    rightOscillator.frequency.setValueAtTime(baseCarrier + beatFrequency, audioContext.currentTime);
+    leftLFO.frequency.setValueAtTime(beatFrequency, audioContext.currentTime);
+    rightLFO.frequency.setValueAtTime(beatFrequency, audioContext.currentTime);
 }
 
 function stopDragSound() {
-    if (leftOscillator) {
-        const fadeOutDuration = 0.5; // Keep 0.5s fade duration
-        const bufferTime = 0.1; // Increased buffer to 0.1s for extra safety
-        const stopTime = audioContext.currentTime + fadeOutDuration + bufferTime;
-
-        // Cancel any existing scheduled values
-        leftGainNode.gain.cancelScheduledValues(audioContext.currentTime);
-        rightGainNode.gain.cancelScheduledValues(audioContext.currentTime);
-
-        // Start fade from current value
-        leftGainNode.gain.setValueAtTime(leftGainNode.gain.value, audioContext.currentTime);
-        rightGainNode.gain.setValueAtTime(rightGainNode.gain.value, audioContext.currentTime);
-
-        // Linear fade to zero
-        leftGainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime + fadeOutDuration);
-        rightGainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime + fadeOutDuration);
-
-        // Explicitly set to 0 at end of fade to ensure silence
-        leftGainNode.gain.setValueAtTime(0, audioContext.currentTime + fadeOutDuration);
-        rightGainNode.gain.setValueAtTime(0, audioContext.currentTime + fadeOutDuration);
-
-        // Stop oscillators after fade + buffer
-        leftOscillator.stop(stopTime);
-        rightOscillator.stop(stopTime);
-        leftLFO.stop(stopTime);
-        rightLFO.stop(stopTime);
-
-        // Clean up after everything is definitely stopped
-        setTimeout(() => {
-            leftOscillator = null;
-            rightOscillator = null;
-            leftGainNode = null;
-            rightGainNode = null;
-            leftPanner = null;
-            rightPanner = null;
-            leftLFO = null;
-            rightLFO = null;
-        }, (fadeOutDuration + bufferTime) * 1000); // Exact match to stopTime in ms
-    }
+    const fadeOutDuration = 0.5; // Smooth fade-out
+    leftGainNode.gain.cancelScheduledValues(audioContext.currentTime);
+    rightGainNode.gain.cancelScheduledValues(audioContext.currentTime);
+    
+    leftGainNode.gain.setValueAtTime(leftGainNode.gain.value, audioContext.currentTime);
+    rightGainNode.gain.setValueAtTime(rightGainNode.gain.value, audioContext.currentTime);
+    
+    leftGainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime + fadeOutDuration);
+    rightGainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime + fadeOutDuration);
 }
 
 function handleStart(x, y) {
@@ -207,7 +173,9 @@ function handleMove(x, y) {
         velX = (x - lastMouseX) * 2;
         velY = (y - lastMouseY) * 2;
         adjustDragPitch(velX);
-        lastMouseX = x;
+        lastMouseX =
+
+ x;
         lastMouseY = y;
         
         if (navigator.vibrate) {
@@ -225,7 +193,6 @@ function handleEnd() {
     if (isDragging) {
         isDragging = false;
         stopDragSound();
-        // Remove playTapSound() from here
         egg.style.transition = 'all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
         
         if (navigator.vibrate) {
