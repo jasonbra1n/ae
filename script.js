@@ -54,7 +54,21 @@ setTimeout(() => {
     rightLFO.start();
 }, 100);
 
-// Animation loop
+// Create cosmic particles
+for (let i = 0; i < 80; i++) {
+    const particle = document.createElement('div');
+    particle.className = 'particle';
+    const size = Math.random() * 2 + 1;
+    Object.assign(particle.style, {
+        width: `${size}px`,
+        height: `${size}px`,
+        left: `${Math.random() * 100}%`,
+        top: `${Math.random() * 100}%`,
+        animationDelay: `${Math.random() * 4}s`
+    });
+    document.body.appendChild(particle);
+}
+
 function animate() {
     const now = performance.now();
     const deltaTime = Math.min((now - lastFrameTime) / 1000, 0.1);
@@ -66,11 +80,16 @@ function animate() {
         velY *= 0.9;
         posX = Math.max(50, Math.min(window.innerWidth - 50, posX + velX));
         posY = Math.max(66, Math.min(window.innerHeight - 66, posY + velY));
-        if (Math.abs(spinVelocity) < 0.1) spinVelocity = 0;
+        if (Math.abs(spinVelocity) < 0.1) {
+            spinVelocity = 0;
+            // Ensure sound stops completely when egg stops
+            leftGainNode.gain.setValueAtTime(0, audioContext.currentTime);
+            rightGainNode.gain.setValueAtTime(0, audioContext.currentTime);
+        }
         rotateZ += spinVelocity * deltaTime * 60;
 
-        // Update pitch and binaural frequency as egg slows
-        adjustDragPitch(spinVelocity);
+        // Update pitch based on spinVelocity when not dragging
+        adjustPitchAfterRelease(spinVelocity);
     }
 
     egg.style.left = `${posX}px`;
@@ -89,7 +108,8 @@ function playTapSound() {
     oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
     gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
     gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.2);
-    oscillator.connect(gainNode).connect(audioContext.destination);
+    oscillator.connect(gainNode);
+    gainNode.connect(audioContext.destination);
     oscillator.start();
     oscillator.stop(audioContext.currentTime + 0.2);
 }
@@ -105,6 +125,7 @@ function startDragSound() {
 }
 
 function adjustDragPitch(velocity) {
+    // During dragging, use drag velocity for binaural effect
     const speed = Math.abs(velocity);
     const minBeatFreq = 2;
     const maxBeatFreq = 40;
@@ -118,6 +139,26 @@ function adjustDragPitch(velocity) {
     rightLFO.frequency.setValueAtTime(beatFrequency, audioContext.currentTime);
 }
 
+function adjustPitchAfterRelease(spinVelocity) {
+    // After release, pitch ramps down with spinVelocity
+    const speed = Math.abs(spinVelocity);
+    const minBeatFreq = 2;
+    const maxBeatFreq = 40;
+    const beatFrequency = minBeatFreq + (maxBeatFreq - minBeatFreq) * (speed / 50); // Adjusted sensitivity
+    const pitchFactor = Math.max(0.5, Math.min(2, (speed / 50) + 0.5)); // Pitch range tied to spin
+    const baseCarrier = 77 * pitchFactor;
+
+    leftOscillator.frequency.setValueAtTime(baseCarrier, audioContext.currentTime);
+    rightOscillator.frequency.setValueAtTime(baseCarrier + beatFrequency, audioContext.currentTime);
+    leftLFO.frequency.setValueAtTime(beatFrequency, audioContext.currentTime);
+    rightLFO.frequency.setValueAtTime(beatFrequency, audioContext.currentTime);
+
+    // Adjust gain based on spinVelocity to fade out sound as it slows
+    const gainValue = Math.min(0.2, speed / 50); // Scale gain with speed
+    leftGainNode.gain.setValueAtTime(gainValue, audioContext.currentTime);
+    rightGainNode.gain.setValueAtTime(gainValue, audioContext.currentTime);
+}
+
 function stopDragSound() {
     const fadeOutDuration = 0.5; // 500ms fade-out
     leftGainNode.gain.cancelScheduledValues(audioContext.currentTime);
@@ -127,7 +168,7 @@ function stopDragSound() {
     leftGainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime + fadeOutDuration);
     rightGainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime + fadeOutDuration);
 
-    // Ensure gain stays at 0
+    // Ensure gain stays at 0 after fade-out
     setTimeout(() => {
         leftGainNode.gain.setValueAtTime(0, audioContext.currentTime);
         rightGainNode.gain.setValueAtTime(0, audioContext.currentTime);
@@ -181,7 +222,7 @@ function handleEnd() {
     }
 }
 
-// Event listeners (unchanged)
+// Event listeners
 egg.addEventListener('mousedown', (e) => handleStart(e.clientX, e.clientY));
 document.addEventListener('mousemove', (e) => handleMove(e.clientX, e.clientY));
 document.addEventListener('mouseup', handleEnd);
