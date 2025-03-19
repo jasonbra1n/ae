@@ -137,22 +137,35 @@ function adjustDragPitch(velocity) {
 
 function stopDragSound() {
     if (leftOscillator) {
-        // Increase fade-out duration to 0.3 seconds for smoother transition
-        leftGainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.3);
-        rightGainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.3);
-        leftOscillator.stop(audioContext.currentTime + 0.3);
-        rightOscillator.stop(audioContext.currentTime + 0.3);
-        leftLFO.stop(audioContext.currentTime + 0.3);
-        rightLFO.stop(audioContext.currentTime + 0.3);
-        
-        leftOscillator = null;
-        rightOscillator = null;
-        leftGainNode = null;
-        rightGainNode = null;
-        leftPanner = null;
-        rightPanner = null;
-        leftLFO = null;
-        rightLFO = null;
+        const fadeOutDuration = 0.5; // Increased to 0.5 seconds for smoother fade
+        const stopTime = audioContext.currentTime + fadeOutDuration + 0.05; // Small buffer
+
+        // Linear ramp to zero to avoid exponential curve clicks
+        leftGainNode.gain.cancelScheduledValues(audioContext.currentTime);
+        leftGainNode.gain.setValueAtTime(leftGainNode.gain.value, audioContext.currentTime);
+        leftGainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime + fadeOutDuration);
+
+        rightGainNode.gain.cancelScheduledValues(audioContext.currentTime);
+        rightGainNode.gain.setValueAtTime(rightGainNode.gain.value, audioContext.currentTime);
+        rightGainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime + fadeOutDuration);
+
+        // Stop oscillators after fade completes with buffer
+        leftOscillator.stop(stopTime);
+        rightOscillator.stop(stopTime);
+        leftLFO.stop(stopTime);
+        rightLFO.stop(stopTime);
+
+        // Clean up references after stopping
+        setTimeout(() => {
+            leftOscillator = null;
+            rightOscillator = null;
+            leftGainNode = null;
+            rightGainNode = null;
+            leftPanner = null;
+            rightPanner = null;
+            leftLFO = null;
+            rightLFO = null;
+        }, fadeOutDuration * 1000 + 50); // Match the stopTime in milliseconds
     }
 }
 
