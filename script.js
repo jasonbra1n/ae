@@ -10,49 +10,14 @@ let velY = 0;
 let lastFrameTime = performance.now();
 
 const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-let leftOscillator = audioContext.createOscillator();
-let rightOscillator = audioContext.createOscillator();
-let leftGainNode = audioContext.createGain();
-let rightGainNode = audioContext.createGain();
-let leftPanner = audioContext.createStereoPanner();
-let rightPanner = audioContext.createStereoPanner();
-let leftLFO = audioContext.createOscillator();
-let rightLFO = audioContext.createOscillator();
-
-// Setup left oscillator
-leftOscillator.type = 'sine';
-leftOscillator.frequency.setValueAtTime(77, audioContext.currentTime);
-leftGainNode.gain.setValueAtTime(0, audioContext.currentTime); // Ensure gain starts at 0
-leftPanner.pan.setValueAtTime(-1, audioContext.currentTime); // Fully left
-leftOscillator.connect(leftGainNode).connect(leftPanner).connect(audioContext.destination);
-
-// Setup right oscillator
-rightOscillator.type = 'sine';
-rightOscillator.frequency.setValueAtTime(117, audioContext.currentTime);
-rightGainNode.gain.setValueAtTime(0, audioContext.currentTime); // Ensure gain starts at 0
-rightPanner.pan.setValueAtTime(1, audioContext.currentTime); // Fully right
-rightOscillator.connect(rightGainNode).connect(rightPanner).connect(audioContext.destination);
-
-// Setup LFOs for binaural effect
-leftLFO.type = 'sine';
-leftLFO.frequency.setValueAtTime(40, audioContext.currentTime);
-const leftLFOGain = audioContext.createGain();
-leftLFOGain.gain.setValueAtTime(0.5, audioContext.currentTime);
-leftLFO.connect(leftLFOGain).connect(leftGainNode.gain);
-
-rightLFO.type = 'sine';
-rightLFO.frequency.setValueAtTime(40, audioContext.currentTime);
-const rightLFOGain = audioContext.createGain();
-rightLFOGain.gain.setValueAtTime(-0.5, audioContext.currentTime);
-rightLFO.connect(rightLFOGain).connect(rightGainNode.gain);
-
-// Start oscillators and LFOs after a delay to ensure silence on load
-setTimeout(() => {
-    leftOscillator.start();
-    rightOscillator.start();
-    leftLFO.start();
-    rightLFO.start();
-}, 100);
+let leftOscillator = null;
+let rightOscillator = null;
+let leftGainNode = null;
+let rightGainNode = null;
+let leftPanner = null;
+let rightPanner = null;
+let leftLFO = null;
+let rightLFO = null;
 
 // Create cosmic particles
 for (let i = 0; i < 80; i++) {
@@ -75,21 +40,13 @@ function animate() {
     lastFrameTime = now;
 
     if (!isDragging) {
-        spinVelocity *= 0.95; // Friction to slow down
+        spinVelocity *= 0.95;
         velX *= 0.9;
         velY *= 0.9;
         posX = Math.max(50, Math.min(window.innerWidth - 50, posX + velX));
         posY = Math.max(66, Math.min(window.innerHeight - 66, posY + velY));
-        if (Math.abs(spinVelocity) < 0.1) {
-            spinVelocity = 0;
-            // Ensure sound stops completely when egg stops
-            leftGainNode.gain.setValueAtTime(0, audioContext.currentTime);
-            rightGainNode.gain.setValueAtTime(0, audioContext.currentTime);
-        }
+        if (Math.abs(spinVelocity) < 0.1) spinVelocity = 0;
         rotateZ += spinVelocity * deltaTime * 60;
-
-        // Update pitch based on spinVelocity when not dragging
-        adjustPitchAfterRelease(spinVelocity);
     }
 
     egg.style.left = `${posX}px`;
@@ -115,64 +72,87 @@ function playTapSound() {
 }
 
 function startDragSound() {
-    const fadeInDuration = 0.02; // 20ms fade-in
-    leftGainNode.gain.cancelScheduledValues(audioContext.currentTime);
-    rightGainNode.gain.cancelScheduledValues(audioContext.currentTime);
-    leftGainNode.gain.setValueAtTime(leftGainNode.gain.value, audioContext.currentTime);
-    rightGainNode.gain.setValueAtTime(rightGainNode.gain.value, audioContext.currentTime);
-    leftGainNode.gain.linearRampToValueAtTime(0.2, audioContext.currentTime + fadeInDuration);
-    rightGainNode.gain.linearRampToValueAtTime(0.2, audioContext.currentTime + fadeInDuration);
+    if (!leftOscillator) {
+        // Left oscillator (carrier frequency: 77 Hz)
+        leftOscillator = audioContext.createOscillator();
+        leftGainNode = audioContext.createGain();
+        leftPanner = audioContext.createStereoPanner();
+        leftOscillator.type = 'sine';
+        leftOscillator.frequency.setValueAtTime(77, audioContext.currentTime);
+        leftGainNode.gain.setValueAtTime(0.2, audioContext.currentTime);
+        leftPanner.pan.setValueAtTime(-1, audioContext.currentTime); // Fully left
+        leftOscillator.connect(leftGainNode).connect(leftPanner).connect(audioContext.destination);
+
+        // Right oscillator (carrier + beat frequency: 77 + 40 = 117 Hz)
+        rightOscillator = audioContext.createOscillator();
+        rightGainNode = audioContext.createGain();
+        rightPanner = audioContext.createStereoPanner();
+        rightOscillator.type = 'sine';
+        rightOscillator.frequency.setValueAtTime(117, audioContext.currentTime);
+        rightGainNode.gain.setValueAtTime(0.2, audioContext.currentTime);
+        rightPanner.pan.setValueAtTime(1, audioContext.currentTime); // Fully right
+        rightOscillator.connect(rightGainNode).connect(rightPanner).connect(audioContext.destination);
+
+        // Panning oscillation with LFO-like effect using OscillatorNode
+        leftLFO = audioContext.createOscillator();
+        leftLFO.type = 'sine';
+        leftLFO.frequency.setValueAtTime(40, audioContext.currentTime); // Beat frequency: 40 Hz
+        const leftLFOGain = audioContext.createGain();
+        leftLFOGain.gain.setValueAtTime(0.5, audioContext.currentTime); // Depth of oscillation
+        leftLFO.connect(leftLFOGain).connect(leftGainNode.gain);
+        leftGainNode.gain.setValueAtTime(0.5, audioContext.currentTime); // Base gain
+
+        rightLFO = audioContext.createOscillator();
+        rightLFO.type = 'sine';
+        rightLFO.frequency.setValueAtTime(40, audioContext.currentTime);
+        const rightLFOGain = audioContext.createGain();
+        rightLFOGain.gain.setValueAtTime(-0.5, audioContext.currentTime); // Inverted for right
+        rightLFO.connect(rightLFOGain).connect(rightGainNode.gain);
+        rightGainNode.gain.setValueAtTime(0.5, audioContext.currentTime); // Base gain
+
+        leftOscillator.start();
+        rightOscillator.start();
+        leftLFO.start();
+        rightLFO.start();
+    }
 }
 
 function adjustDragPitch(velocity) {
-    // During dragging, use drag velocity for binaural effect
-    const speed = Math.abs(velocity);
-    const minBeatFreq = 2;
-    const maxBeatFreq = 40;
-    const beatFrequency = minBeatFreq + (maxBeatFreq - minBeatFreq) * (speed / 100); // Varies 2-40 Hz
-    const pitchFactor = Math.max(0.5, Math.min(2, (speed / 100) + 0.5)); // Pitch range
-    const baseCarrier = 77 * pitchFactor;
-
-    leftOscillator.frequency.setValueAtTime(baseCarrier, audioContext.currentTime);
-    rightOscillator.frequency.setValueAtTime(baseCarrier + beatFrequency, audioContext.currentTime);
-    leftLFO.frequency.setValueAtTime(beatFrequency, audioContext.currentTime);
-    rightLFO.frequency.setValueAtTime(beatFrequency, audioContext.currentTime);
-}
-
-function adjustPitchAfterRelease(spinVelocity) {
-    // After release, pitch ramps down with spinVelocity
-    const speed = Math.abs(spinVelocity);
-    const minBeatFreq = 2;
-    const maxBeatFreq = 40;
-    const beatFrequency = minBeatFreq + (maxBeatFreq - minBeatFreq) * (speed / 50); // Adjusted sensitivity
-    const pitchFactor = Math.max(0.5, Math.min(2, (speed / 50) + 0.5)); // Pitch range tied to spin
-    const baseCarrier = 77 * pitchFactor;
-
-    leftOscillator.frequency.setValueAtTime(baseCarrier, audioContext.currentTime);
-    rightOscillator.frequency.setValueAtTime(baseCarrier + beatFrequency, audioContext.currentTime);
-    leftLFO.frequency.setValueAtTime(beatFrequency, audioContext.currentTime);
-    rightLFO.frequency.setValueAtTime(beatFrequency, audioContext.currentTime);
-
-    // Adjust gain based on spinVelocity to fade out sound as it slows
-    const gainValue = Math.min(0.2, speed / 50); // Scale gain with speed
-    leftGainNode.gain.setValueAtTime(gainValue, audioContext.currentTime);
-    rightGainNode.gain.setValueAtTime(gainValue, audioContext.currentTime);
+    if (leftOscillator && rightOscillator) {
+        // Calculate pitch factor based on drag velocity (faster = higher pitch)
+        const pitchFactor = Math.max(0.5, Math.min(2, (Math.abs(velocity) / 100) + 0.5));
+        
+        // Base frequencies with pitch fluctuation
+        const baseCarrier = 77 * pitchFactor;
+        const beatFrequency = 40; // Fixed beat frequency
+        
+        leftOscillator.frequency.setValueAtTime(baseCarrier, audioContext.currentTime);
+        rightOscillator.frequency.setValueAtTime(baseCarrier + beatFrequency, audioContext.currentTime);
+        
+        // Adjust LFO frequency to match beat frequency (panning rate remains 40 Hz)
+        leftLFO.frequency.setValueAtTime(beatFrequency, audioContext.currentTime);
+        rightLFO.frequency.setValueAtTime(beatFrequency, audioContext.currentTime);
+    }
 }
 
 function stopDragSound() {
-    const fadeOutDuration = 0.5; // 500ms fade-out
-    leftGainNode.gain.cancelScheduledValues(audioContext.currentTime);
-    rightGainNode.gain.cancelScheduledValues(audioContext.currentTime);
-    leftGainNode.gain.setValueAtTime(leftGainNode.gain.value, audioContext.currentTime);
-    rightGainNode.gain.setValueAtTime(rightGainNode.gain.value, audioContext.currentTime);
-    leftGainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime + fadeOutDuration);
-    rightGainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime + fadeOutDuration);
-
-    // Ensure gain stays at 0 after fade-out
-    setTimeout(() => {
-        leftGainNode.gain.setValueAtTime(0, audioContext.currentTime);
-        rightGainNode.gain.setValueAtTime(0, audioContext.currentTime);
-    }, fadeOutDuration * 1000);
+    if (leftOscillator) {
+        leftGainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.1);
+        rightGainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.1);
+        leftOscillator.stop(audioContext.currentTime + 0.1);
+        rightOscillator.stop(audioContext.currentTime + 0.1);
+        leftLFO.stop(audioContext.currentTime + 0.1);
+        rightLFO.stop(audioContext.currentTime + 0.1);
+        
+        leftOscillator = null;
+        rightOscillator = null;
+        leftGainNode = null;
+        rightGainNode = null;
+        leftPanner = null;
+        rightPanner = null;
+        leftLFO = null;
+        rightLFO = null;
+    }
 }
 
 function handleStart(x, y) {
@@ -187,7 +167,10 @@ function handleStart(x, y) {
     initialPosX = posX;
     initialPosY = posY;
     egg.style.transition = 'none';
-    if (navigator.vibrate) navigator.vibrate([200, 50, 200, 50, 200]);
+    
+    if (navigator.vibrate) {
+        navigator.vibrate([200, 50, 200, 50, 200]);
+    }
 }
 
 function handleMove(x, y) {
@@ -204,7 +187,10 @@ function handleMove(x, y) {
         adjustDragPitch(velX);
         lastMouseX = x;
         lastMouseY = y;
-        if (navigator.vibrate) navigator.vibrate([50, 50, 50]);
+        
+        if (navigator.vibrate) {
+            navigator.vibrate([50, 50, 50]);
+        }
     } else {
         const targetX = x - window.innerWidth / 2;
         const targetY = y - window.innerHeight / 2;
@@ -217,8 +203,12 @@ function handleEnd() {
     if (isDragging) {
         isDragging = false;
         stopDragSound();
+        playTapSound();
         egg.style.transition = 'all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
-        if (navigator.vibrate) navigator.vibrate(0);
+        
+        if (navigator.vibrate) {
+            navigator.vibrate(0);
+        }
     }
 }
 
@@ -226,17 +216,21 @@ function handleEnd() {
 egg.addEventListener('mousedown', (e) => handleStart(e.clientX, e.clientY));
 document.addEventListener('mousemove', (e) => handleMove(e.clientX, e.clientY));
 document.addEventListener('mouseup', handleEnd);
+
 egg.addEventListener('touchstart', (e) => {
     const touch = e.touches[0];
     handleStart(touch.clientX, touch.clientY);
     e.preventDefault();
 }, { passive: false });
+
 document.addEventListener('touchmove', (e) => {
     const touch = e.touches[0];
     handleMove(touch.clientX, touch.clientY);
     e.preventDefault();
 }, { passive: false });
+
 document.addEventListener('touchend', handleEnd);
+
 window.addEventListener('resize', () => {
     if (!isDragging) {
         posX = window.innerWidth / 2;
