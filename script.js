@@ -137,12 +137,13 @@ function adjustDragPitch(velocity) {
 
 function stopDragSound() {
     if (leftOscillator) {
-        leftGainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.1);
-        rightGainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.1);
-        leftOscillator.stop(audioContext.currentTime + 0.1);
-        rightOscillator.stop(audioContext.currentTime + 0.1);
-        leftLFO.stop(audioContext.currentTime + 0.1);
-        rightLFO.stop(audioContext.currentTime + 0.1);
+        // Increase fade-out duration to 0.3 seconds for smoother transition
+        leftGainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.3);
+        rightGainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.3);
+        leftOscillator.stop(audioContext.currentTime + 0.3);
+        rightOscillator.stop(audioContext.currentTime + 0.3);
+        leftLFO.stop(audioContext.currentTime + 0.3);
+        rightLFO.stop(audioContext.currentTime + 0.3);
         
         leftOscillator = null;
         rightOscillator = null;
@@ -203,7 +204,7 @@ function handleEnd() {
     if (isDragging) {
         isDragging = false;
         stopDragSound();
-        playTapSound();
+        // playTapSound();
         egg.style.transition = 'all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
         
         if (navigator.vibrate) {
